@@ -8,6 +8,8 @@ from config import (
     EMBED_MODEL,
     CHAT_MODEL,
     OLLAMA_HOST,
+    CONTACT_EMAIL,
+    CONTACT_PHONE,
 )
 
 ollama_client = ollama.Client(host=OLLAMA_HOST)
@@ -125,6 +127,29 @@ def generate_answer(question: str, found_items: list[dict]) -> str:
     return response["message"]["content"]
 
 
+def render_feedback_block() -> None:
+    st.markdown("---")
+    st.subheader("Обратная связь")
+    st.caption(
+        "Если вы нашли ошибку в ответе, некорректный источник или не нашли нужную информацию, "
+        "сообщите ответственному за систему."
+    )
+
+    contact_rows = []
+
+    if CONTACT_EMAIL:
+        contact_rows.append(f"**Email:** [{CONTACT_EMAIL}](mailto:{CONTACT_EMAIL})")
+
+    if CONTACT_PHONE:
+        phone_href = CONTACT_PHONE.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        contact_rows.append(f"**Телефон:** [{CONTACT_PHONE}](tel:{phone_href})")
+
+    if contact_rows:
+        st.markdown("  \n".join(contact_rows))
+    else:
+        st.info("Контакты пока не указаны. Администратор может задать CONTACT_EMAIL и CONTACT_PHONE.")
+
+
 st.set_page_config(
     page_title="Поиск по протоколам",
     layout="wide",
@@ -137,6 +162,7 @@ with st.sidebar:
     st.caption(f"Ollama: {OLLAMA_HOST}")
     st.caption(f"Embedding model: {EMBED_MODEL}")
     st.caption(f"Chat model: {CHAT_MODEL}")
+    render_feedback_block()
 
 question = st.text_input("Введите вопрос по протоколам:")
 
@@ -152,6 +178,7 @@ if st.button("Найти ответ") and question.strip():
         found_items = search_protocols(question, n_results=n_results)
 
     if not found_items:
+        render_feedback_block()
         st.stop()
 
     st.subheader("Найденные пункты")
@@ -168,3 +195,5 @@ if st.button("Найти ответ") and question.strip():
 
     st.subheader("Ответ")
     st.write(answer)
+
+render_feedback_block()
