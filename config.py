@@ -19,3 +19,6 @@ COLLECTION_NAME = os.getenv("COLLECTION_NAME", "meeting_protocols")
 
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1500"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
+
+CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "")
+CONTACT_PHONE = os.getenv("CONTACT_PHONE", "")
