@@ -20,6 +20,8 @@ services:
       CHAT_MODEL: llama3.2:1b
       EXCEL_PATH: /app/data/protocols.xlsx
       CHROMA_PATH: /app/vector_db
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+      CONTACT_PHONE: ${CONTACT_PHONE:-}
     volumes:
       - ./data:/app/data
       - ./vector_db:/app/vector_db
