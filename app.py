@@ -1,17 +1,20 @@
-import streamlit as st
 import chromadb
 import ollama
+import streamlit as st
 
 from config import (
     CHROMA_PATH,
     COLLECTION_NAME,
     EMBED_MODEL,
     CHAT_MODEL,
+    OLLAMA_HOST,
 )
+
+ollama_client = ollama.Client(host=OLLAMA_HOST)
 
 
 def get_embedding(text: str) -> list[float]:
-    response = ollama.embeddings(
+    response = ollama_client.embeddings(
         model=EMBED_MODEL,
         prompt=text,
     )
@@ -20,6 +23,7 @@ def get_embedding(text: str) -> list[float]:
 
 def search_protocols(question: str, n_results: int = 8):
     client = chromadb.PersistentClient(path=str(CHROMA_PATH))
+
     try:
         collection = client.get_collection(name=COLLECTION_NAME)
     except Exception:
@@ -28,19 +32,25 @@ def search_protocols(question: str, n_results: int = 8):
         )
         return []
 
-    question_embedding = get_embedding(question)
+    try:
+        question_embedding = get_embedding(question)
+    except Exception as exc:
+        st.error(
+            "Не удалось обратиться к Ollama. Проверь, что Ollama запущена и модель для embeddings скачана."
+        )
+        st.code(str(exc))
+        return []
 
     results = collection.query(
         query_embeddings=[question_embedding],
         n_results=n_results,
     )
 
+    docs = results.get("documents", [[]])[0]
+    metadatas = results.get("metadatas", [[]])[0]
+    distances = results.get("distances", [[]])[0]
+
     found = []
-
-    docs = results["documents"][0]
-    metadatas = results["metadatas"][0]
-    distances = results["distances"][0]
-
     for doc, metadata, distance in zip(docs, metadatas, distances):
         found.append(
             {
@@ -95,15 +105,22 @@ def build_prompt(question: str, found_items: list[dict]) -> str:
 def generate_answer(question: str, found_items: list[dict]) -> str:
     prompt = build_prompt(question, found_items)
 
-    response = ollama.chat(
-        model=CHAT_MODEL,
-        messages=[
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
-    )
+    try:
+        response = ollama_client.chat(
+            model=CHAT_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+        )
+    except Exception as exc:
+        return (
+            "Не удалось сформировать ответ через Ollama. "
+            "Проверь, что чат-модель скачана и доступна.\n\n"
+            f"Ошибка: {exc}"
+        )
 
     return response["message"]["content"]
 
@@ -114,6 +131,12 @@ st.set_page_config(
 )
 
 st.title("Поиск по протоколам совещаний")
+
+with st.sidebar:
+    st.subheader("Настройки")
+    st.caption(f"Ollama: {OLLAMA_HOST}")
+    st.caption(f"Embedding model: {EMBED_MODEL}")
+    st.caption(f"Chat model: {CHAT_MODEL}")
 
 question = st.text_input("Введите вопрос по протоколам:")
 
@@ -130,8 +153,6 @@ if st.button("Найти ответ") and question.strip():
 
     if not found_items:
         st.stop()
-
-
 
     st.subheader("Найденные пункты")
 
