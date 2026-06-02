@@ -1,0 +1,30 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: protocols_ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+
+  app:
+    build: .
+    container_name: protocols_app
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      EMBED_MODEL: nomic-embed-text
+      CHAT_MODEL: llama3.2:1b
+      EXCEL_PATH: /app/data/protocols.xlsx
+      CHROMA_PATH: /app/vector_db
+    volumes:
+      - ./data:/app/data
+      - ./vector_db:/app/vector_db
+    ports:
+      - "127.0.0.1:8501:8501"
+
+volumes:
+  ollama_data:
