@@ -11,11 +11,12 @@ from config import (
     COL_PROTOCOL_DATE,
     COL_ITEM_NUMBER,
     COL_ITEM_TEXT,
+    OLLAMA_HOST,
+    CHUNK_SIZE,
+    CHUNK_OVERLAP,
 )
 
-
-CHUNK_SIZE = 1500
-CHUNK_OVERLAP = 200
+ollama_client = ollama.Client(host=OLLAMA_HOST)
 
 
 def normalize_text(value) -> str:
@@ -39,6 +40,9 @@ def split_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
     """
     text = normalize_text(text)
 
+    if not text:
+        return []
+
     if len(text) <= chunk_size:
         return [text]
 
@@ -52,19 +56,17 @@ def split_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVE
         if chunk:
             chunks.append(chunk)
 
-        start = end - overlap
+        next_start = end - overlap
+        if next_start <= start:
+            next_start = end
 
-        if start < 0:
-            start = 0
-
-        if start >= len(text):
-            break
+        start = next_start
 
     return chunks
 
 
 def get_embedding(text: str) -> list[float]:
-    response = ollama.embeddings(
+    response = ollama_client.embeddings(
         model=EMBED_MODEL,
         prompt=text,
     )
@@ -72,6 +74,17 @@ def get_embedding(text: str) -> list[float]:
 
 
 def main():
+    print(f"Excel: {EXCEL_PATH}")
+    print(f"Vector DB: {CHROMA_PATH}")
+    print(f"Ollama: {OLLAMA_HOST}")
+    print(f"Embedding model: {EMBED_MODEL}")
+
+    if not EXCEL_PATH.exists():
+        raise FileNotFoundError(
+            f"Excel-файл не найден: {EXCEL_PATH}. "
+            "Положи файл в data/protocols.xlsx или задай EXCEL_PATH."
+        )
+
     df = pd.read_excel(EXCEL_PATH)
 
     required_columns = [
@@ -89,6 +102,7 @@ def main():
     df[COL_ITEM_TEXT] = df[COL_ITEM_TEXT].apply(normalize_text)
     df = df[df[COL_ITEM_TEXT] != ""]
 
+    CHROMA_PATH.mkdir(parents=True, exist_ok=True)
     client = chromadb.PersistentClient(path=str(CHROMA_PATH))
 
     try:
@@ -104,6 +118,7 @@ def main():
     ids = []
 
     total_chunks = 0
+    failed_chunks = 0
 
     for index, row in df.iterrows():
         item_text = normalize_text(row[COL_ITEM_TEXT])
@@ -137,6 +152,7 @@ def main():
             try:
                 embedding = get_embedding(document)
             except Exception as e:
+                failed_chunks += 1
                 print("ОШИБКА при создании embedding")
                 print(f"Источник: {source_ref}")
                 print(f"Длина текста: {len(document)} символов")
@@ -162,6 +178,7 @@ def main():
 
     print(f"Готово. Строк Excel обработано: {len(df)}")
     print(f"Кусков добавлено в базу: {total_chunks}")
+    print(f"Кусков с ошибкой: {failed_chunks}")
 
 
 if __name__ == "__main__":
